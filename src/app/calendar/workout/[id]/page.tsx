@@ -11,10 +11,10 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { users, workouts, planBlocks } from "@/db/schema";
 import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_EMOJI, STATUS_LABEL } from "../../workoutLabels";
+import { mondayOf, parseLocalDate, toLocalDateString } from "../../dateUtils";
 
 function fmtDateLong(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
+  return parseLocalDate(iso).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -80,9 +80,7 @@ export default async function WorkoutDetailPage({
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
       <Link
-        href={`/calendar?week=${mondayOf(new Date(workout.scheduledDate))
-          .toISOString()
-          .slice(0, 10)}`}
+        href={`/calendar?week=${toLocalDateString(mondayOf(parseLocalDate(workout.scheduledDate)))}`}
         className="text-sm text-muted hover:text-foreground mb-6 inline-block"
       >
         ← Back to calendar
@@ -163,11 +161,3 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function mondayOf(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d;
-}

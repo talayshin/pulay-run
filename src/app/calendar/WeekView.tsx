@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PlannedWorkout } from "@/db/schema";
 import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_EMOJI, STATUS_LABEL } from "./workoutLabels";
+import { addDays, sameDate, toLocalDateString } from "./dateUtils";
 
 interface WorkoutRow {
   id: string;
@@ -17,24 +18,6 @@ interface Props {
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-function addDays(d: Date, n: number): Date {
-  const out = new Date(d);
-  out.setDate(out.getDate() + n);
-  return out;
-}
-
-function sameDate(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function fmtDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
 export function WeekView({ weekStart, workouts }: Props) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -45,11 +28,11 @@ export function WeekView({ weekStart, workouts }: Props) {
     <div className="space-y-2">
       {DAY_NAMES.map((dayName, idx) => {
         const date = addDays(weekStart, idx);
-        const workout = byDate.get(fmtDate(date));
+        const workout = byDate.get(toLocalDateString(date));
         const isToday = sameDate(date, today);
         return (
           <DayRow
-            key={fmtDate(date)}
+            key={toLocalDateString(date)}
             dayName={dayName}
             date={date}
             isToday={isToday}

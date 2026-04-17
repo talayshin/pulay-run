@@ -22,30 +22,13 @@ import {
   type Preferences,
 } from "@/db/schema";
 
+import { addDays, mondayOf, toLocalDateString } from "./dateUtils";
+
 type DayAbbr = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 const DAY_INDEX: Record<DayAbbr, number> = {
   mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0,
 };
-
-function mondayOf(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // shift so Monday is the start
-  d.setDate(d.getDate() + diff);
-  return d;
-}
-
-function addDays(date: Date, n: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
-}
-
-function toDateString(d: Date): string {
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
-}
 
 interface WorkoutSeed {
   type: "easy_run" | "tempo" | "intervals" | "long_run" | "recovery_run" | "rest" | "strength" | "cross_training";
@@ -147,8 +130,8 @@ export async function createSamplePlan() {
     .values({
       userId: userRow.id,
       status: "active",
-      startDate: toDateString(start),
-      endDate: toDateString(end),
+      startDate: toLocalDateString(start),
+      endDate: toLocalDateString(end),
       goalDescription: profile.goalDescription ?? null,
     })
     .returning();
@@ -159,8 +142,8 @@ export async function createSamplePlan() {
     .values({
       planId: plan.id,
       phase: "base",
-      startDate: toDateString(start),
-      endDate: toDateString(addDays(start, 13)),
+      startDate: toLocalDateString(start),
+      endDate: toLocalDateString(addDays(start, 13)),
       description: "Base — building aerobic volume at easy effort",
       sortOrder: 0,
     })
@@ -171,8 +154,8 @@ export async function createSamplePlan() {
     .values({
       planId: plan.id,
       phase: "build",
-      startDate: toDateString(addDays(start, 14)),
-      endDate: toDateString(end),
+      startDate: toLocalDateString(addDays(start, 14)),
+      endDate: toLocalDateString(end),
       description: "Build — introducing tempo and interval work",
       sortOrder: 1,
     })
@@ -191,7 +174,7 @@ export async function createSamplePlan() {
         userId: userRow.id,
         planId: plan.id,
         blockId: block.id,
-        scheduledDate: toDateString(date),
+        scheduledDate: toLocalDateString(date),
         workoutType: seed.type,
         planned: seed.planned,
         status: "planned",

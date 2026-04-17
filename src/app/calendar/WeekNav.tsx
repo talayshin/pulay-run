@@ -1,18 +1,9 @@
 import Link from "next/link";
+import { addDays, toLocalDateString } from "./dateUtils";
 
 interface Props {
   weekStart: Date;
   isCurrentWeek: boolean;
-}
-
-function addDays(d: Date, n: number): Date {
-  const out = new Date(d);
-  out.setDate(out.getDate() + n);
-  return out;
-}
-
-function fmtUrl(d: Date): string {
-  return d.toISOString().slice(0, 10);
 }
 
 function fmtRange(start: Date): string {
@@ -43,7 +34,7 @@ export function WeekNav({ weekStart, isCurrentWeek }: Props) {
 
       <div className="flex items-center gap-2">
         <Link
-          href={`/calendar?week=${fmtUrl(prev)}`}
+          href={`/calendar?week=${toLocalDateString(prev)}`}
           className="px-3 py-2 rounded-lg border border-border hover:bg-surface text-sm font-medium"
           aria-label="Previous week"
         >
@@ -58,7 +49,7 @@ export function WeekNav({ weekStart, isCurrentWeek }: Props) {
           </Link>
         )}
         <Link
-          href={`/calendar?week=${fmtUrl(next)}`}
+          href={`/calendar?week=${toLocalDateString(next)}`}
           className="px-3 py-2 rounded-lg border border-border hover:bg-surface text-sm font-medium"
           aria-label="Next week"
         >

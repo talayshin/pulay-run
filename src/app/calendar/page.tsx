@@ -15,32 +15,16 @@ import { users, athleteProfiles, plans, workouts } from "@/db/schema";
 import { CreateSamplePlanButton } from "./CreateSamplePlanButton";
 import { WeekView } from "./WeekView";
 import { WeekNav } from "./WeekNav";
-
-function mondayOf(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d;
-}
-
-function addDays(d: Date, n: number): Date {
-  const out = new Date(d);
-  out.setDate(out.getDate() + n);
-  return out;
-}
+import { addDays, mondayOf, parseLocalDate, toLocalDateString } from "./dateUtils";
 
 function parseWeekParam(raw?: string): Date {
   const today = new Date();
   if (!raw) return mondayOf(today);
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return mondayOf(today);
-  return mondayOf(parsed);
-}
-
-function fmtDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  try {
+    return mondayOf(parseLocalDate(raw));
+  } catch {
+    return mondayOf(today);
+  }
 }
 
 export default async function CalendarPage({
@@ -69,7 +53,7 @@ export default async function CalendarPage({
   const weekStart = parseWeekParam(params.week);
   const weekEnd = addDays(weekStart, 6);
   const thisWeek = mondayOf(new Date());
-  const isCurrentWeek = fmtDate(weekStart) === fmtDate(thisWeek);
+  const isCurrentWeek = toLocalDateString(weekStart) === toLocalDateString(thisWeek);
 
   const [activePlan] = await db
     .select()
@@ -90,8 +74,8 @@ export default async function CalendarPage({
         .where(
           and(
             eq(workouts.userId, userRow.id),
-            gte(workouts.scheduledDate, fmtDate(weekStart)),
-            lte(workouts.scheduledDate, fmtDate(weekEnd)),
+            gte(workouts.scheduledDate, toLocalDateString(weekStart)),
+            lte(workouts.scheduledDate, toLocalDateString(weekEnd)),
           ),
         )
     : [];
@@ -188,8 +172,8 @@ async function PeriodizationView({ planId }: { planId: string }) {
     return <p className="text-muted">No blocks in this plan yet.</p>;
   }
 
-  const first = new Date(blocks[0].startDate);
-  const last = new Date(blocks[blocks.length - 1].endDate);
+  const first = parseLocalDate(blocks[0].startDate);
+  const last = parseLocalDate(blocks[blocks.length - 1].endDate);
   const totalDays = Math.ceil((last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
   const phaseColor: Record<string, string> = {
@@ -209,8 +193,8 @@ async function PeriodizationView({ planId }: { planId: string }) {
       <div className="relative bg-surface border border-border rounded-xl p-6">
         <div className="relative h-24 flex rounded-lg overflow-hidden">
           {blocks.map((b) => {
-            const start = new Date(b.startDate);
-            const end = new Date(b.endDate);
+            const start = parseLocalDate(b.startDate);
+            const end = parseLocalDate(b.endDate);
             const dayCount =
               Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
             const width = (dayCount / totalDays) * 100;
