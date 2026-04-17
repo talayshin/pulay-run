@@ -12,6 +12,7 @@ import { db } from "@/db/client";
 import { users, workouts, planBlocks } from "@/db/schema";
 import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_EMOJI, STATUS_LABEL } from "../../workoutLabels";
 import { mondayOf, parseLocalDate, toLocalDateString } from "../../dateUtils";
+import { StatusButtons } from "./StatusButtons";
 
 function fmtDateLong(iso: string): string {
   return parseLocalDate(iso).toLocaleDateString("en-US", {
@@ -126,9 +127,16 @@ export default async function WorkoutDetailPage({
         )}
 
         {workout.notes && (
-          <div>
+          <div className="mb-6">
             <h3 className="text-sm font-medium text-muted mb-2">Your notes</h3>
             <p className="text-sm leading-relaxed">{workout.notes}</p>
+          </div>
+        )}
+
+        {workout.workoutType !== "rest" && (
+          <div className="pt-6 border-t border-border">
+            <h3 className="text-sm font-medium text-muted mb-3">Log this workout</h3>
+            <StatusButtons workoutId={workout.id} currentStatus={workout.status} />
           </div>
         )}
       </div>

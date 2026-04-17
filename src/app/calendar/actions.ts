@@ -6,6 +6,9 @@
  * `createSamplePlan`: generate a 4-week placeholder plan so the calendar has
  * data to render before real plan generation (Phase 4) lands. This is
  * explicitly development scaffolding — delete or hide once Phase 4 ships.
+ *
+ * `updateWorkoutStatus`: mark a workout completed/skipped/planned. Used until
+ * Strava-driven activity matching (Phase 3) does this automatically.
  */
 
 import { auth } from "@clerk/nextjs/server";
@@ -21,6 +24,31 @@ import {
   type PlannedWorkout,
   type Preferences,
 } from "@/db/schema";
+
+type WorkoutStatus = "planned" | "completed" | "skipped" | "modified";
+
+export async function updateWorkoutStatus(
+  workoutId: string,
+  status: WorkoutStatus,
+) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) throw new Error("Not authenticated");
+
+  const [userRow] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.clerkUserId, clerkUserId))
+    .limit(1);
+  if (!userRow) throw new Error("User row not found");
+
+  await db
+    .update(workouts)
+    .set({ status, updatedAt: new Date() })
+    .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userRow.id)));
+
+  revalidatePath(`/calendar/workout/${workoutId}`);
+  revalidatePath("/calendar");
+}
 
 import { addDays, mondayOf, toLocalDateString } from "./dateUtils";
 

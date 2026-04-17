@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import {
   ClerkProvider,
   SignInButton,
@@ -64,8 +65,24 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ClerkProvider appearance={clerkAppearance}>
           <header className="flex items-center justify-between px-6 py-3 border-b border-border bg-surface">
-            <span className="text-lg font-semibold">PulayRun</span>
-            <div className="flex items-center gap-3">
+            <Link href="/" className="text-lg font-semibold hover:text-accent transition-colors">
+              PulayRun
+            </Link>
+            <div className="flex items-center gap-4">
+              <Show when="signed-in">
+                <Link
+                  href="/calendar"
+                  className="text-sm font-medium text-muted hover:text-foreground transition-colors"
+                >
+                  Calendar
+                </Link>
+                <Link
+                  href="/settings"
+                  className="text-sm font-medium text-muted hover:text-foreground transition-colors"
+                >
+                  Settings
+                </Link>
+              </Show>
               <Show when="signed-out">
                 <SignInButton>
                   <button className="text-sm font-medium text-foreground hover:text-accent transition-colors">
