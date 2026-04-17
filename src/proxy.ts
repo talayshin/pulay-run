@@ -12,6 +12,7 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/strava/webhook(.*)", // Strava webhook must be publicly accessible
+  "/api/webhooks/clerk(.*)", // Clerk webhook must be publicly accessible
 ]);
 
 export default clerkMiddleware(async (auth, request) => {

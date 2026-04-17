@@ -30,8 +30,8 @@ Do **not** add scope beyond what's in the spec without updating the spec first (
 - [x] `.env.local` created with Clerk keys + Neon DATABASE_URL
 - [x] Push schema to Neon (drizzle-kit push — completed 2026-04-17)
 - [x] App theme established (warm Claude-inspired palette — `globals.css`)
-- [ ] Test sign-up flow (first test user at localhost:3000)
-- [ ] Commit all pending changes
+- [x] Test sign-up flow (first test user — completed 2026-04-17)
+- [x] Commit all pending changes (79a3dc4 — pushed 2026-04-17)
 
 ---
 
@@ -40,11 +40,12 @@ Do **not** add scope beyond what's in the spec without updating the spec first (
 **Goal:** A new user can sign up, complete onboarding, and have a populated profile in the database.
 
 - [x] Sign-in / sign-up pages (Clerk components, App Router routes — completed 2026-04-17)
-- [ ] Clerk webhook (`user.created`) → create `users` row in database
-- [ ] Onboarding flow — coach-led chat collecting: age, running background, goal, constraints
-- [ ] Populate `athlete_profiles` + `preferences` from onboarding answers
-- [ ] Set initial `archetype` from onboarding answers (source = `onboarding`)
-- [ ] Redirect to calendar after onboarding completes
+- [x] Clerk webhook (`user.created`) → create `users` row in database (completed 2026-04-17)
+- [x] Onboarding flow — 3-step form: goal type, training days, free-text (completed 2026-04-17)
+- [x] Populate `athlete_profiles` + `preferences` from onboarding answers (completed 2026-04-17)
+- [x] Set initial `archetype` from onboarding answers (source = `onboarding`) (completed 2026-04-17)
+- [x] Redirect to calendar after onboarding completes (completed 2026-04-17)
+- [x] Placeholder `/calendar` page with "connect Strava" banner (completed 2026-04-17)
 
 **Architecture reference:** §5.1 (Onboarding flow)
 

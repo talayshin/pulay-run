@@ -1,8 +1,8 @@
 # PulayRun — Architecture
 
 Status: Draft v0.1
-Last updated: 2026-04-14
-Related: [`spec.md`](spec.md) · [`decisions/001-stack-choice.md`](decisions/001-stack-choice.md)
+Last updated: 2026-04-17
+Related: [`spec.md`](spec.md) · [`decisions/001-stack-choice.md`](decisions/001-stack-choice.md) · [`decisions/002-knowledge-base-video-transcripts.md`](decisions/002-knowledge-base-video-transcripts.md)
 
 ---
 
@@ -181,18 +181,20 @@ Rebuilt by a background job after activity sync and nightly.
 
 ### 4.6 Knowledge base
 
-**`knowledge_books`**
+**`knowledge_sources`** (renamed from `knowledge_books` per ADR-002)
 - `id` — pk
 - `title` — text
 - `author` — text nullable
-- `source_filename` — text
+- `source_type` — enum: `pdf | video_transcript`
+- `source_location` — text — path or channel URL identifying where the source came from
 - `archetype_tags` — text[] — e.g., `['masters', 'competitive']`
 - `goal_tags` — text[] — e.g., `['marathon', 'ultra']`
 - `notes` — text nullable
 
 **`knowledge_chunks`**
 - `id` — pk
-- `book_id` — fk
+- `source_id` — fk → knowledge_sources.id
+- `origin_ref` — text nullable — e.g., page number for PDFs, video_id for transcripts (for debugging only; not surfaced)
 - `chunk_index` — int
 - `text` — text
 - `token_count` — int
@@ -224,12 +226,18 @@ Shape is versioned implicitly — any field can be added; code must handle missi
 
 1. User signs up via Clerk (email or social).
 2. Webhook from Clerk → create `users` row.
-3. User lands on onboarding screen.
-4. Coach-led chat walks through a structured questionnaire: age, running background, goal, constraints. Each answer is either written to `athlete_profiles` fields or into `preferences` via the `update_preferences` tool.
-5. Strava OAuth connect (optional in v1 but encouraged).
-6. Backfill job: fetch last 6 months of activities. Compute initial `athlete_states`.
-7. Archetype refinement: combine onboarding answers + Strava-derived state to set `archetype` and `archetype_confidence`. Source = `onboarding` if Strava absent; `strava_refined` if both.
+3. User lands on onboarding screen (`/onboarding`).
+4. Structured multi-step form (no LLM during onboarding in v1). Fields are intentionally minimal because hard data (age, sex, weight, running history, pace baselines) comes from Strava:
+   - **Goal type** — race / general fitness / health maintenance. If race: distance + target date.
+   - **Training days** — which days of the week the athlete is available to run (stored in `preferences.trainingDays`).
+   - **Free-text context** (optional) — "anything else your coach should know" (injuries, life context, preferences). Stored as `athlete_profiles.goal_description`. Captured for later LLM use; not consumed during onboarding in v1.
+   - **Archetype derivation** — set from goal type alone via simple rule: `race_goal → serious_athlete`, `general_fitness → general_fitness`, `health_maintenance → health_maintenance`. `archetype_source = "onboarding"`.
+5. Strava OAuth connect — **skippable**. A "skip for now" option is offered alongside the primary connect button. If skipped, a banner on the calendar encourages connecting Strava for more accurate coaching.
+6. Backfill job (only if Strava connected): fetch last 6 months of activities. Compute initial `athlete_states`.
+7. Archetype refinement (only if Strava connected): combine onboarding answers + Strava-derived state to set `archetype` and `archetype_confidence`. `archetype_source = "strava_refined"`.
 8. Generate initial plan (see §5.2).
+   - With Strava: personalized to current fitness + volume + pace.
+   - Without Strava: generic plan appropriate for the goal + archetype, with a UI banner inviting the user to connect Strava for personalization.
 9. Land on calendar.
 
 ### 5.2 Plan generation
@@ -313,17 +321,27 @@ A coach turn assembles:
 
 ## 7. Knowledge base
 
+Sources come in two types: **PDFs** (books) and **video transcripts** (long-form coaching videos transcribed offline). See [`decisions/002-knowledge-base-video-transcripts.md`](decisions/002-knowledge-base-video-transcripts.md) for the rationale on adding transcripts. The ≤10-source budget applies at the **author/channel** level, not the file level (one channel = one source even if it contains many video files).
+
 ### 7.1 Ingestion (offline, developer-run)
 
-A Node script (`scripts/ingest-book.ts`):
+A Node script (`scripts/ingest-source.ts`) — handles both source types via a `--type pdf|transcripts` flag:
 
+**For `--type pdf`:**
 1. Reads PDF from local path (PDFs stored outside the git repo per the copyright note).
 2. Extracts text with `pdf-parse`.
 3. Normalizes (strip page numbers, headers, hyphenation artifacts).
+
+**For `--type transcripts`:**
+1. Reads a directory of `.md` transcript files (one per video, produced by the offline `yt-dlp` + `whisper.cpp` pipeline — see ADR-002).
+2. Parses the YAML header (`source`, `video_id`, `title`, `duration_s`, `view_count`, `url`) and uses `source` to group all videos under a single `knowledge_sources` row.
+3. Sentence-aware chunking (spoken transcripts lack paragraph structure, so fixed-token windows chunk poorly — see ADR-002 implementation notes).
+
+**Common steps (both types):**
 4. Chunks into ~500-token pieces with ~50-token overlap.
 5. Embeds each chunk (embedding model TBD with LLM provider).
-6. Upserts `knowledge_books` row and `knowledge_chunks` rows.
-7. Developer provides metadata via a small TOML/JSON config file: `title`, `author`, `archetype_tags`, `goal_tags`.
+6. Upserts `knowledge_sources` row and `knowledge_chunks` rows.
+7. Developer provides metadata via a small TOML/JSON config file: `title`, `author`, `source_type` (`pdf | video_transcript`), `archetype_tags`, `goal_tags`.
 
 ### 7.2 Retrieval
 
