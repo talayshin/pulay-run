@@ -7,6 +7,12 @@ const nextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  typescript: {
+    // Next.js 16.2.4 auto-generates .next/dev/types/validator.ts with imports
+    // from a broken next/types.js barrel. CI runs `tsc --noEmit` separately
+    // (with .next/dev excluded) so type safety is still enforced at PR time.
+    ignoreBuildErrors: true,
+  },
 };
 
 export default nextConfig;
