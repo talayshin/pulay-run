@@ -9,7 +9,7 @@
  * See architecture.md §5.1 step 4.
  */
 
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -46,20 +46,41 @@ export async function saveOnboarding(input: OnboardingInput) {
     throw new Error("Not authenticated");
   }
 
-  // Find the users row created by the Clerk webhook
-  const [userRow] = await db
+  // Find the users row created by the Clerk webhook.
+  // In the rare case the webhook hasn't fired yet (fast signup → submit),
+  // create the row here as a fallback. Both paths use clerk_user_id as the
+  // unique key, so concurrent writes from both sides are safe.
+  let [userRow] = await db
     .select()
     .from(users)
     .where(eq(users.clerkUserId, clerkUserId))
     .limit(1);
 
   if (!userRow) {
-    throw new Error("User row not found — webhook may not have fired yet");
+    const clerkUser = await currentUser();
+    const email =
+      clerkUser?.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
+        ?.emailAddress ??
+      clerkUser?.emailAddresses[0]?.emailAddress ??
+      "";
+    await db
+      .insert(users)
+      .values({ clerkUserId, email })
+      .onConflictDoNothing({ target: users.clerkUserId });
+    [userRow] = await db
+      .select()
+      .from(users)
+      .where(eq(users.clerkUserId, clerkUserId))
+      .limit(1);
+    if (!userRow) {
+      throw new Error("Failed to create user row");
+    }
   }
 
+  // notes live in athlete_profiles.goal_description (see architecture.md §4.1).
+  // preferences.notes is reserved for coach-facing preference tweaks made in chat.
   const preferences: Preferences = {
     preferredDays: input.trainingDays,
-    ...(input.notes ? { notes: input.notes } : {}),
   };
 
   await db

@@ -82,10 +82,12 @@ export async function POST(req: Request) {
   switch (type) {
     case "user.created": {
       const email = getPrimaryEmail(data);
-      await db.insert(users).values({
-        clerkUserId: data.id,
-        email,
-      });
+      // onConflictDoNothing handles Svix retries and races with the onboarding
+      // server action fallback (see src/app/onboarding/actions.ts).
+      await db
+        .insert(users)
+        .values({ clerkUserId: data.id, email })
+        .onConflictDoNothing({ target: users.clerkUserId });
       break;
     }
 
