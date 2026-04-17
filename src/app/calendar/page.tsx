@@ -1,44 +1,100 @@
 /**
- * Calendar page — placeholder for v1.
+ * Calendar page — week view.
  *
- * Redirects to /onboarding if the user has no athlete_profiles row
- * (onboarding not yet completed).
- *
- * The real calendar UI ships in Phase 2 of the roadmap.
+ * Redirects to /onboarding if no athlete_profiles row exists.
+ * If no active plan, shows a "create sample plan" CTA (dev scaffolding).
+ * If active plan, shows the selected week as a row-per-day layout.
  */
 
+import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { db } from "@/db/client";
-import { users, athleteProfiles } from "@/db/schema";
+import { users, athleteProfiles, plans, workouts } from "@/db/schema";
+import { CreateSamplePlanButton } from "./CreateSamplePlanButton";
+import { WeekView } from "./WeekView";
+import { WeekNav } from "./WeekNav";
 
-export default async function CalendarPage() {
+function mondayOf(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+function addDays(d: Date, n: number): Date {
+  const out = new Date(d);
+  out.setDate(out.getDate() + n);
+  return out;
+}
+
+function parseWeekParam(raw?: string): Date {
+  const today = new Date();
+  if (!raw) return mondayOf(today);
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return mondayOf(today);
+  return mondayOf(parsed);
+}
+
+function fmtDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+export default async function CalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string; view?: string }>;
+}) {
   const { userId: clerkUserId } = await auth();
-  if (!clerkUserId) {
-    redirect("/sign-in");
-  }
+  if (!clerkUserId) redirect("/sign-in");
 
   const [userRow] = await db
     .select({ id: users.id })
     .from(users)
     .where(eq(users.clerkUserId, clerkUserId))
     .limit(1);
-
-  if (!userRow) {
-    // Webhook hasn't fired yet — send to onboarding which will handle the race.
-    redirect("/onboarding");
-  }
+  if (!userRow) redirect("/onboarding");
 
   const [profile] = await db
     .select()
     .from(athleteProfiles)
     .where(eq(athleteProfiles.userId, userRow.id))
     .limit(1);
+  if (!profile) redirect("/onboarding");
 
-  if (!profile) {
-    redirect("/onboarding");
-  }
+  const params = await searchParams;
+  const weekStart = parseWeekParam(params.week);
+  const weekEnd = addDays(weekStart, 6);
+  const thisWeek = mondayOf(new Date());
+  const isCurrentWeek = fmtDate(weekStart) === fmtDate(thisWeek);
+
+  const [activePlan] = await db
+    .select()
+    .from(plans)
+    .where(and(eq(plans.userId, userRow.id), eq(plans.status, "active")))
+    .limit(1);
+
+  const weekWorkouts = activePlan
+    ? await db
+        .select({
+          id: workouts.id,
+          scheduledDate: workouts.scheduledDate,
+          workoutType: workouts.workoutType,
+          planned: workouts.planned,
+          status: workouts.status,
+        })
+        .from(workouts)
+        .where(
+          and(
+            eq(workouts.userId, userRow.id),
+            gte(workouts.scheduledDate, fmtDate(weekStart)),
+            lte(workouts.scheduledDate, fmtDate(weekEnd)),
+          ),
+        )
+    : [];
 
   const goalLabel =
     profile.goalType === "race_goal"
@@ -50,28 +106,64 @@ export default async function CalendarPage() {
       : "Staying healthy, keeping moving";
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
-      <div className="mb-8">
-        <p className="text-sm text-muted mb-1">Your goal</p>
-        <h1 className="text-2xl font-semibold">{goalLabel}</h1>
+    <div className="max-w-4xl mx-auto px-6 py-8">
+      {/* Header */}
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-muted mb-1">Your goal</p>
+          <h1 className="text-2xl font-semibold">{goalLabel}</h1>
+        </div>
+        {activePlan && (
+          <div className="flex items-center gap-1 bg-surface border border-border rounded-lg p-1">
+            <Link
+              href="/calendar"
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                params.view !== "periodization"
+                  ? "bg-background"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Week
+            </Link>
+            <Link
+              href="/calendar?view=periodization"
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                params.view === "periodization"
+                  ? "bg-background"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Periodization
+            </Link>
+          </div>
+        )}
       </div>
 
-      <div className="bg-surface border border-border rounded-2xl p-8 mb-6">
-        <h2 className="text-xl font-semibold mb-2">Your calendar lives here</h2>
-        <p className="text-muted mb-4">
-          We&apos;re still building this out. Soon you&apos;ll see your week, planned workouts, and how each run fits into
-          your training block.
-        </p>
-        <p className="text-sm text-muted">
-          Coming in Phase 2: week view, periodization view, workout details.
-        </p>
-      </div>
+      {/* Main */}
+      {!activePlan ? (
+        <div className="bg-surface border border-border rounded-2xl p-8 text-center">
+          <h2 className="text-xl font-semibold mb-2">No plan yet</h2>
+          <p className="text-muted mb-6 max-w-md mx-auto">
+            Your AI coach will generate a personalized plan once plan generation ships. Until then, create a sample
+            plan to explore the calendar.
+          </p>
+          <CreateSamplePlanButton />
+        </div>
+      ) : params.view === "periodization" ? (
+        <PeriodizationView planId={activePlan.id} />
+      ) : (
+        <>
+          <WeekNav weekStart={weekStart} isCurrentWeek={isCurrentWeek} />
+          <WeekView weekStart={weekStart} workouts={weekWorkouts} />
+        </>
+      )}
 
-      <div className="bg-accent/5 border border-accent/20 rounded-2xl p-6">
+      {/* Strava banner — shown when there's no connection (Phase 3 will wire real state) */}
+      <div className="mt-10 bg-accent/5 border border-accent/20 rounded-2xl p-6">
         <h3 className="font-semibold mb-1">Connect Strava for more accurate coaching</h3>
         <p className="text-sm text-muted mb-4">
-          Your coach can only personalize workouts once it knows your current fitness, pace, and weekly volume.
-          Connecting Strava fixes that.
+          Your coach can personalize workouts once it knows your current fitness, pace, and weekly volume. Connecting
+          Strava fixes that.
         </p>
         <button
           disabled
@@ -79,6 +171,71 @@ export default async function CalendarPage() {
         >
           Connect Strava (coming soon)
         </button>
+      </div>
+    </div>
+  );
+}
+
+async function PeriodizationView({ planId }: { planId: string }) {
+  const { planBlocks } = await import("@/db/schema");
+  const blocks = await db
+    .select()
+    .from(planBlocks)
+    .where(eq(planBlocks.planId, planId))
+    .orderBy(planBlocks.sortOrder);
+
+  if (blocks.length === 0) {
+    return <p className="text-muted">No blocks in this plan yet.</p>;
+  }
+
+  const first = new Date(blocks[0].startDate);
+  const last = new Date(blocks[blocks.length - 1].endDate);
+  const totalDays = Math.ceil((last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+  const phaseColor: Record<string, string> = {
+    base: "bg-success/30 border-success/40",
+    build: "bg-accent/30 border-accent/40",
+    peak: "bg-warning/30 border-warning/40",
+    taper: "bg-muted/30 border-muted/40",
+    recovery: "bg-success/20 border-success/30",
+    maintenance: "bg-border border-border",
+  };
+
+  return (
+    <div>
+      <div className="mb-4 text-sm text-muted">
+        {totalDays} days · {blocks.length} block{blocks.length === 1 ? "" : "s"}
+      </div>
+      <div className="relative bg-surface border border-border rounded-xl p-6">
+        <div className="relative h-24 flex rounded-lg overflow-hidden">
+          {blocks.map((b) => {
+            const start = new Date(b.startDate);
+            const end = new Date(b.endDate);
+            const dayCount =
+              Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            const width = (dayCount / totalDays) * 100;
+            return (
+              <div
+                key={b.id}
+                style={{ width: `${width}%` }}
+                className={`border flex flex-col justify-center px-3 ${
+                  phaseColor[b.phase] ?? "bg-surface border-border"
+                }`}
+              >
+                <div className="text-xs font-medium uppercase tracking-wide">{b.phase}</div>
+                <div className="text-xs text-muted">{dayCount}d</div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 space-y-2">
+          {blocks.map((b) => (
+            <div key={b.id} className="text-sm flex gap-3">
+              <div className="w-20 font-medium capitalize">{b.phase}</div>
+              <div className="text-muted">{b.description}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
